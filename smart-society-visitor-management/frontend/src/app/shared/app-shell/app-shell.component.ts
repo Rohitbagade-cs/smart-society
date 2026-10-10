@@ -30,18 +30,21 @@ const NAV: Record<string, NavItem[]> = {
     { label: 'Society Config', route: '/admin/society', icon: 'settings' },
     { label: 'Audit Log', route: '/admin/audit', icon: 'history' },
     { label: 'AI Assistant', route: '/admin/ai-chat', icon: 'smart_toy' },
+    { label: 'My Profile', route: '/admin/profile', icon: 'account_circle' },
   ],
   guard: [
     { label: 'Dashboard', route: '/guard', icon: 'dashboard' },
     { label: 'Verify Visitor', route: '/guard/verify', icon: 'verified' },
     { label: 'Entry / Exit', route: '/guard/entry-exit', icon: 'sync_alt' },
     { label: 'Daily Log', route: '/guard/daily-log', icon: 'list_alt' },
+    { label: 'My Profile', route: '/guard/profile', icon: 'account_circle' },
     { label: 'Notifications', route: '/guard/notifications', icon: 'notifications' },
   ],
   resident: [
     { label: 'Dashboard', route: '/resident', icon: 'dashboard' },
     { label: 'Invite Visitor', route: '/resident/invite', icon: 'person_add' },
     { label: 'Visitor History', route: '/resident/history', icon: 'history' },
+    { label: 'My Profile', route: '/resident/profile', icon: 'account_circle' },
     { label: 'Notifications', route: '/resident/notifications', icon: 'notifications' },
   ],
 };

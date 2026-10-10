@@ -159,6 +159,35 @@ import { ID_PROOF_TYPES, VISITOR_TYPES, extractGates, formatApiError, residentLa
           </button>
         </mat-card-header>
         <mat-card-content>
+          <div class="recent-filters">
+            <mat-form-field appearance="outline" class="recent-search">
+              <mat-label>Search visitor / phone</mat-label>
+              <input
+                matInput
+                #recentSearchInput
+                placeholder="Name or phone"
+                (keyup.enter)="applyRecentFilters(recentSearchInput.value)"
+              />
+              <mat-icon matSuffix>search</mat-icon>
+            </mat-form-field>
+            <mat-form-field appearance="outline" class="recent-status">
+              <mat-label>Status</mat-label>
+              <mat-select [value]="recentStatus" (selectionChange)="onRecentStatusChange($event.value)">
+                <mat-option *ngFor="let s of recentStatuses" [value]="s.value">{{ s.label }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <button mat-raised-button color="primary" (click)="applyRecentFilters(recentSearchInput.value)">
+              Search
+            </button>
+            <button mat-button (click)="clearRecentFilters(recentSearchInput)">Clear</button>
+            <span class="toolbar-spacer"></span>
+            <mat-form-field appearance="outline" class="recent-pagesize">
+              <mat-label>Rows</mat-label>
+              <mat-select [value]="recentPageSize" (selectionChange)="onRecentPageSizeChange($event.value)">
+                <mat-option *ngFor="let n of recentPageSizes" [value]="n">{{ n }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
           <div class="table-wrap">
             <table mat-table [dataSource]="recent">
               <ng-container matColumnDef="id">
@@ -186,7 +215,20 @@ import { ID_PROOF_TYPES, VISITOR_TYPES, extractGates, formatApiError, residentLa
               <tr mat-header-row *matHeaderRowDef="recentCols"></tr>
               <tr mat-row *matRowDef="let row; columns: recentCols"></tr>
             </table>
-            <div class="empty-state" *ngIf="recent.length === 0 && !loadingRecent">No requests yet.</div>
+            <div class="empty-state" *ngIf="recent.length === 0 && !loadingRecent">
+              {{ recentSearch || recentStatus ? 'No requests match your filters.' : 'No requests yet.' }}
+            </div>
+          </div>
+          <div class="recent-pager" *ngIf="recentCount > 0">
+            <span class="pager-info">
+              {{ recentCount }} request{{ recentCount === 1 ? '' : 's' }} · Page {{ recentPage }} of {{ recentTotalPages }}
+            </span>
+            <button mat-stroked-button (click)="recentPrev()" [disabled]="recentPage <= 1">
+              <mat-icon>chevron_left</mat-icon> Prev
+            </button>
+            <button mat-stroked-button (click)="recentNext()" [disabled]="recentPage >= recentTotalPages">
+              Next <mat-icon>chevron_right</mat-icon>
+            </button>
           </div>
         </mat-card-content>
       </mat-card>
@@ -194,6 +236,43 @@ import { ID_PROOF_TYPES, VISITOR_TYPES, extractGates, formatApiError, residentLa
   `,
   styles: [
     `
+      .recent-filters {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .recent-search {
+        flex: 1 1 220px;
+        min-width: 180px;
+      }
+      .recent-status {
+        width: 168px;
+      }
+      .recent-pagesize {
+        width: 104px;
+      }
+      .recent-pager {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        justify-content: flex-end;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+      .pager-info {
+        font-size: 13px;
+        color: var(--text-dim);
+        margin-right: auto;
+      }
+      @media (max-width: 600px) {
+        .recent-status,
+        .recent-pagesize {
+          flex: 1 1 45%;
+          width: auto;
+        }
+      }
       .flag {
         border-left: 4px solid #b0b6d4;
         border-top: 1px solid var(--border);
@@ -266,6 +345,22 @@ export class GuardDashboardComponent implements OnInit, OnDestroy {
   recentCols = ['id', 'visitor', 'flat', 'purpose', 'status'];
   saving = false;
   loadingRecent = false;
+  // Recent-requests table: search / filter / pagination state
+  recentPage = 1;
+  recentPageSize = 8;
+  recentSearch = '';
+  recentStatus = '';
+  recentCount = 0;
+  recentStatuses = [
+    { value: '', label: 'All statuses' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'checked_in', label: 'Checked in' },
+    { value: 'checked_out', label: 'Checked out' },
+    { value: 'cancelled', label: 'Cancelled' },
+  ];
+  recentPageSizes = [8, 20, 50];
 
   // AI: security flags, voice fill, auto type detection
   flags: SecurityFlag[] | null = null;
@@ -537,13 +632,64 @@ export class GuardDashboardComponent implements OnInit, OnDestroy {
 
   loadRecent(): void {
     this.loadingRecent = true;
-    this.api.list<VisitRequest>('/visit-requests/', { page_size: 8 }).subscribe({
+    const params: Record<string, unknown> = {
+      page: this.recentPage,
+      page_size: this.recentPageSize,
+    };
+    if (this.recentSearch.trim()) params['search'] = this.recentSearch.trim();
+    if (this.recentStatus) params['status'] = this.recentStatus;
+    this.api.list<VisitRequest>('/visit-requests/', params).subscribe({
       next: (r) => {
         this.recent = r.results;
+        this.recentCount = r.count;
         this.loadingRecent = false;
       },
       error: () => (this.loadingRecent = false),
     });
+  }
+
+  get recentTotalPages(): number {
+    return Math.max(1, Math.ceil(this.recentCount / this.recentPageSize));
+  }
+
+  applyRecentFilters(searchValue: string): void {
+    this.recentSearch = searchValue;
+    this.recentPage = 1;
+    this.loadRecent();
+  }
+
+  clearRecentFilters(searchInput: HTMLInputElement): void {
+    searchInput.value = '';
+    this.recentSearch = '';
+    this.recentStatus = '';
+    this.recentPage = 1;
+    this.loadRecent();
+  }
+
+  onRecentStatusChange(value: string): void {
+    this.recentStatus = value;
+    this.recentPage = 1;
+    this.loadRecent();
+  }
+
+  onRecentPageSizeChange(value: number): void {
+    this.recentPageSize = value;
+    this.recentPage = 1;
+    this.loadRecent();
+  }
+
+  recentPrev(): void {
+    if (this.recentPage > 1) {
+      this.recentPage--;
+      this.loadRecent();
+    }
+  }
+
+  recentNext(): void {
+    if (this.recentPage < this.recentTotalPages) {
+      this.recentPage++;
+      this.loadRecent();
+    }
   }
 
   submit(): void {

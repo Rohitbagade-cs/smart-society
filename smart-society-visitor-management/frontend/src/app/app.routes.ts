@@ -16,6 +16,7 @@ import { EntryExitComponent } from './guard/entry-exit/entry-exit.component';
 import { DailyLogComponent } from './guard/daily-log/daily-log.component';
 import { ResidentDashboardComponent } from './resident/resident-dashboard/resident-dashboard.component';
 import { InviteVisitorComponent } from './resident/invite-visitor/invite-visitor.component';
+import { MyProfileComponent } from './shared/my-profile/my-profile.component';
 import { VisitorHistoryComponent } from './resident/visitor-history/visitor-history.component';
 import { NotificationsComponent } from './resident/notifications/notifications.component';
 import { LandingComponent } from './landing/landing.component';
@@ -54,6 +55,7 @@ export const routes: Routes = [
       { path: 'society', component: SocietyConfigComponent },
       { path: 'audit', component: AuditLogComponent },
       { path: 'ai-chat', component: AiChatComponent },
+      { path: 'profile', component: MyProfileComponent },
     ],
   },
   {
@@ -67,6 +69,7 @@ export const routes: Routes = [
       { path: 'entry-exit', component: EntryExitComponent },
       { path: 'daily-log', component: DailyLogComponent },
       { path: 'notifications', component: NotificationsComponent },
+      { path: 'profile', component: MyProfileComponent },
     ],
   },
   {
@@ -78,6 +81,7 @@ export const routes: Routes = [
       { path: '', component: ResidentDashboardComponent },
       { path: 'invite', component: InviteVisitorComponent },
       { path: 'history', component: VisitorHistoryComponent },
+      { path: 'profile', component: MyProfileComponent },
       { path: 'notifications', component: NotificationsComponent },
     ],
   },

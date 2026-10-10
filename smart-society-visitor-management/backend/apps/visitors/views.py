@@ -19,6 +19,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.filters import SearchFilter
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -124,6 +125,8 @@ class VisitRequestViewSet(viewsets.ModelViewSet):
 
     serializer_class = VisitRequestSerializer
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filter_backends = [SearchFilter]
+    search_fields = ["visitor__full_name", "visitor__phone"]
 
     def get_permissions(self):
         if self.action == "scan_qr":

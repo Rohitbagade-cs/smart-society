@@ -13,7 +13,7 @@ interface DonutSeg extends DonutDatum {
   finalOffset: number;
 }
 
-const PALETTE = ['#7c4dff', '#ff4081', '#00d1b2', '#ffb300', '#5aa9ff', '#ff7aa8', '#4fe3c1'];
+const PALETTE = ['#7184bd', '#c77783', '#54a995', '#d3a54a', '#7097c5', '#a284b5', '#899e72'];
 
 /**
  * Animated SVG donut chart (no external dependency).
@@ -34,7 +34,7 @@ const PALETTE = ['#7c4dff', '#ff4081', '#00d1b2', '#ffb300', '#5aa9ff', '#ff7aa8
       role="img"
       [attr.aria-label]="title || 'Donut chart'"
     >
-      <circle cx="100" cy="100" [attr.r]="radius" fill="none" stroke="#e9edf7" [attr.stroke-width]="stroke" />
+      <circle cx="100" cy="100" [attr.r]="radius" fill="none" stroke="#e9eeeb" [attr.stroke-width]="stroke" />
       <g transform="rotate(-90 100 100)">
         <circle
           *ngFor="let s of segments"
@@ -51,8 +51,8 @@ const PALETTE = ['#7c4dff', '#ff4081', '#00d1b2', '#ffb300', '#5aa9ff', '#ff7aa8
           <title>{{ s.label }}: {{ s.value }}</title>
         </circle>
       </g>
-      <text x="100" y="98" class="donut-center">{{ total }}</text>
-      <text x="100" y="116" class="donut-center-label">{{ centerLabel }}</text>
+      <text x="100" y="93" class="donut-center">{{ total }}</text>
+      <text x="100" y="111" class="donut-center-label">{{ centerLabel }}</text>
     </svg>
     <div class="chart-legend" *ngIf="segments.length">
       <span *ngFor="let s of segments">

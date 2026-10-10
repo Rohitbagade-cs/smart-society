@@ -5,8 +5,10 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
+import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { ApiService } from '../../core/api.service';
+import { AiService } from '../../core/ai.service';
 import { toISODate, visitorTypeLabel } from '../../core/utils';
 import { popIn, staggerCards } from '../../core/animations';
 import { BarChartComponent, BarDatum } from '../../shared/charts/bar-chart.component';
@@ -37,58 +39,90 @@ interface Stats {
     MatIconModule,
     MatProgressSpinnerModule,
     MatButtonModule,
+    FormsModule,
     BarChartComponent,
     DonutChartComponent,
   ],
   animations: [staggerCards, popIn],
   template: `
     <div class="page">
-      <h1 class="page-title">Admin Dashboard</h1>
-      <p class="page-subtitle">Society overview &amp; quick navigation</p>
+      <div class="dash-head admin-heading">
+        <div>
+          <div class="eyebrow"><span class="live-dot"></span> OPERATIONS OVERVIEW</div>
+          <h1 class="page-title">Good day, administrator</h1>
+          <p class="page-subtitle">A clear view of access activity across your community.</p>
+        </div>
+        <a mat-raised-button color="primary" routerLink="/admin/visitors"><mat-icon>badge</mat-icon> View visitor records</a>
+      </div>
 
-      <div class="card-grid" *ngIf="!loading; else spinner" [@staggerCards]>
-        <mat-card class="stat-card anim-card" *ngFor="let s of statCards">
-          <mat-card-content>
-            <div class="stat-ic"><mat-icon>{{ s.icon }}</mat-icon></div>
-            <div class="stat-value" [@popIn]>{{ stats[s.key] }}</div>
-            <div class="stat-label">{{ s.label }}</div>
-          </mat-card-content>
-        </mat-card>
+      <div class="admin-kpi-strip" *ngIf="!loading; else spinner" [@staggerCards]>
+        <article class="admin-kpi" *ngFor="let s of statCards; let first = first" [class.kpi-primary]="first">
+          <div class="kpi-top"><span class="stat-label">{{ s.label }}</span><mat-icon>{{ s.icon }}</mat-icon></div>
+          <div class="stat-value" [@popIn]>{{ stats[s.key] }}</div>
+          <span class="kpi-note">{{ s.key === 'pending' ? 'Awaiting a resident response' : s.key === 'entries' ? 'Recorded at the gate today' : s.key === 'exits' ? 'Recorded at the gate today' : 'Across this community' }}</span>
+        </article>
       </div>
       <ng-template #spinner><mat-spinner diameter="40"></mat-spinner></ng-template>
 
-      <div class="card-grid" *ngIf="!loadingCharts" [@staggerCards]>
-        <mat-card class="chart-card anim-card" style="grid-column: span 2;">
+      <div class="admin-insights" *ngIf="!loadingCharts" [@staggerCards]>
+        <mat-card class="chart-card anim-card traffic-chart">
           <mat-card-content>
             <app-bar-chart [data]="weeklyEntries" title="Entries — last 7 days"></app-bar-chart>
           </mat-card-content>
         </mat-card>
-        <mat-card class="chart-card anim-card">
+        <mat-card class="chart-card anim-card type-chart">
           <mat-card-content>
             <app-donut-chart
               [data]="typeBreakdown"
               title="Requests by visitor type — this month"
-              centerLabel="requests"
+              centerLabel="Request"
             ></app-donut-chart>
           </mat-card-content>
         </mat-card>
       </div>
 
-      <h2>Manage</h2>
-      <div class="card-grid" [@staggerCards]>
-        <mat-card *ngFor="let l of links" class="anim-card link-card" [routerLink]="l.route">
-          <mat-card-content>
-            <mat-icon color="primary">{{ l.icon }}</mat-icon>
-            <h3 style="margin:8px 0 4px;">{{ l.label }}</h3>
-            <p class="page-subtitle" style="margin:0;">{{ l.desc }}</p>
-          </mat-card-content>
-        </mat-card>
+      <section class="ai-command" aria-labelledby="ai-command-title">
+        <div class="ai-command-intro">
+          <div class="ai-orbit" aria-hidden="true"><mat-icon>auto_awesome</mat-icon></div>
+          <div class="eyebrow">CIVICSPACE INTELLIGENCE</div>
+          <h2 id="ai-command-title">Your community, in context.</h2>
+          <p>Ask a question about visitor activity. Answers are generated from your society’s live records.</p>
+          <a routerLink="/admin/ai-chat" class="ai-full-link">Open AI Assistant <mat-icon>arrow_forward</mat-icon></a>
+        </div>
+        <div class="ai-command-body">
+          <div class="ai-prompts" aria-label="Suggested questions">
+            <button type="button" *ngFor="let prompt of aiPrompts" (click)="askAi(prompt)" [disabled]="aiLoading">{{ prompt }}</button>
+          </div>
+          <form class="ai-ask-form" (ngSubmit)="askAi()">
+            <label class="sr-only" for="dashboard-ai-question">Ask about visitor activity</label>
+            <input id="dashboard-ai-question" name="question" [(ngModel)]="aiQuestion" placeholder="Ask about visitor activity…" [disabled]="aiLoading" autocomplete="off" />
+            <button type="submit" aria-label="Ask AI" [disabled]="!aiQuestion.trim() || aiLoading">
+              <mat-spinner *ngIf="aiLoading" diameter="18"></mat-spinner>
+              <mat-icon *ngIf="!aiLoading">arrow_upward</mat-icon>
+            </button>
+          </form>
+          <div class="ai-answer" *ngIf="aiAnswer" aria-live="polite">
+            <span class="ai-answer-label"><mat-icon>auto_awesome</mat-icon> LIVE DATA RESPONSE</span>
+            <p>{{ aiAnswer }}</p>
+          </div>
+          <p class="ai-error" *ngIf="aiError" role="alert">{{ aiError }}</p>
+        </div>
+      </section>
+
+      <div class="section-heading"><div><div class="eyebrow">WORKSPACE</div><h2>Manage your community</h2></div><span>Tools for day-to-day operations</span></div>
+      <div class="admin-tools" [@staggerCards]>
+        <a *ngFor="let l of links" class="admin-tool anim-card" [routerLink]="l.route">
+          <span class="tool-icon"><mat-icon>{{ l.icon }}</mat-icon></span>
+          <span class="tool-copy"><strong>{{ l.label }}</strong><small>{{ l.desc }}</small></span>
+          <mat-icon class="tool-arrow">arrow_forward</mat-icon>
+        </a>
       </div>
     </div>
   `,
 })
 export class AdminDashboardComponent implements OnInit {
   private api = inject(ApiService);
+  private ai = inject(AiService);
 
   loading = true;
   loadingCharts = true;
@@ -104,6 +138,38 @@ export class AdminDashboardComponent implements OnInit {
 
   weeklyEntries: BarDatum[] = [];
   typeBreakdown: DonutDatum[] = [];
+  aiQuestion = '';
+  aiAnswer = '';
+  aiError = '';
+  aiLoading = false;
+  aiPrompts = [
+    'Summarize today’s gate activity',
+    'Any after-hours entries this week?',
+    'Which visitor type is most common?',
+  ];
+
+  askAi(prompt?: string): void {
+    const question = (prompt ?? this.aiQuestion).trim();
+    if (!question || this.aiLoading) return;
+    this.aiQuestion = question;
+    this.aiAnswer = '';
+    this.aiError = '';
+    this.aiLoading = true;
+    this.ai.chat(question).subscribe({
+      next: (reply) => {
+        this.aiAnswer = reply.answer || 'No answer was returned for that question.';
+        this.aiLoading = false;
+      },
+      error: (error) => {
+        this.aiError = error?.status === 429
+          ? 'The AI request limit has been reached. Try again later or open the full assistant.'
+          : error?.status === 503
+            ? 'AI is not configured for this workspace. Contact your system administrator.'
+            : 'The AI assistant could not answer right now. Please try again.';
+        this.aiLoading = false;
+      },
+    });
+  }
 
   links: QuickLink[] = [
     { label: 'Users', desc: 'Create, edit and deactivate users & roles', route: '/admin/users', icon: 'people' },

@@ -14,6 +14,7 @@ from apps.accounts.models import ResidentProfile, SecurityGuardProfile, User
 from apps.accounts.permissions import IsAdmin, IsGuard
 from apps.accounts.serializers import (
     CustomTokenObtainPairSerializer,
+    MyProfileUpdateSerializer,
     ResidentProfileSerializer,
     SecurityGuardProfileSerializer,
     UserRegisterSerializer,
@@ -32,11 +33,23 @@ class LoginView(TokenObtainPairView):
 
 
 class MeView(APIView):
-    """GET /api/auth/me/ -> profile of the currently authenticated user."""
+    """GET /api/auth/me/ -> profile of the currently authenticated user.
+    PATCH /api/auth/me/ -> the user updates their own whitelisted fields."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        return Response(UserSerializer(request.user).data)
+
+    def patch(self, request):
+        serializer = MyProfileUpdateSerializer(
+            request.user, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        log_audit(
+            request, "profile.update", "user", request.user.id, {"username": request.user.username}
+        )
         return Response(UserSerializer(request.user).data)
 
 

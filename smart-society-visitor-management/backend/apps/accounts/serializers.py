@@ -43,6 +43,48 @@ class SecurityGuardProfileSerializer(serializers.ModelSerializer):
         fields = ["id", "user", "user_id", "shift", "gate", "phone"]
 
 
+class MyProfileUpdateSerializer(serializers.Serializer):
+    """Self-service profile update (PATCH /api/auth/me/).
+
+    Whitelisted fields only — username, role, and staff flags can never be
+    changed here, so a resident cannot escalate their own privileges.
+    """
+
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    flat_no = serializers.CharField(max_length=20, required=False)
+    wing = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    floor = serializers.IntegerField(required=False, min_value=0, max_value=200)
+    family_members = serializers.IntegerField(required=False, min_value=1, max_value=30)
+    shift = serializers.ChoiceField(
+        choices=["morning", "evening", "night"], required=False
+    )
+    gate = serializers.CharField(max_length=60, required=False, allow_blank=True)
+
+    def update(self, instance, validated_data):
+        for field in ("first_name", "last_name", "email"):
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
+        if "phone" in validated_data and hasattr(instance, "phone"):
+            instance.phone = validated_data["phone"]
+        instance.save()
+        resident = getattr(instance, "resident_profile", None)
+        if resident is not None:
+            for field in ("flat_no", "wing", "floor", "phone", "family_members"):
+                if field in validated_data:
+                    setattr(resident, field, validated_data[field])
+            resident.save()
+        guard = getattr(instance, "guard_profile", None)
+        if guard is not None:
+            for field in ("shift", "gate", "phone"):
+                if field in validated_data:
+                    setattr(guard, field, validated_data[field])
+            guard.save()
+        return instance
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Full user serializer. `password` is write-only and always hashed."""
 

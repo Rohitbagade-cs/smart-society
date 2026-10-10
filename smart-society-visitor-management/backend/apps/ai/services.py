@@ -6,7 +6,7 @@ ONLY from local environment variables — never from chat or code:
 
     LLM_API_KEY   Gemini API key (required)
     LLM_BASE_URL  override, defaults to the Gemini OpenAI-compatible base URL
-    LLM_MODEL     override, defaults to gemini-2.5-flash
+    LLM_MODEL     override, defaults to gemini-3.5-flash-lite
 
 No third-party HTTP library is needed: the client uses the stdlib (urllib).
 
@@ -16,6 +16,7 @@ Also hosts the rule-based security-flag engine (no LLM needed).
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from datetime import timedelta
@@ -37,7 +38,7 @@ def _llm_settings():
             "LLM_BASE_URL",
             "https://generativelanguage.googleapis.com/v1beta/openai",
         ).rstrip("/"),
-        os.environ.get("LLM_MODEL", "gemini-2.5-flash").strip(),
+        os.environ.get("LLM_MODEL", "gemini-3.5-flash-lite").strip(),
     )
 
 
@@ -49,8 +50,12 @@ def chat_complete(messages, temperature=0.2, max_tokens=4000):
     Note: max_tokens must be generous because Gemini is a reasoning model —
     its internal thinking consumes part of the token budget before the
     visible answer starts. A tight budget truncates the answer mid-sentence.
+    The extra_body thinking_budget caps the thinking pass itself (in tokens);
+    without it, gemini-3.x "thinks" for ~60s even on trivial prompts.
+    Do NOT also send reasoning_effort — the two overlap and can't be combined.
     """
     api_key, base_url, model = _llm_settings()
+    t0 = time.perf_counter()
     if not api_key:
         raise LLMNotConfigured(
             "LLM_API_KEY is not set. Set it as a local environment variable "
@@ -62,6 +67,9 @@ def chat_complete(messages, temperature=0.2, max_tokens=4000):
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "extra_body": {
+                "google": {"thinking_config": {"thinking_budget": 512}}
+            },
         }
     ).encode("utf-8")
     req = urllib.request.Request(
@@ -74,13 +82,17 @@ def chat_complete(messages, temperature=0.2, max_tokens=4000):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=180) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "ignore")[:400]
         raise RuntimeError(f"LLM request failed (HTTP {exc.code}): {detail}")
     except urllib.error.URLError as exc:
         raise RuntimeError(f"LLM request failed: {exc.reason}")
+    print(
+        f"[ai] model={model} answered in {time.perf_counter() - t0:.1f}s",
+        flush=True,
+    )
     choices = data.get("choices") or []
     text = (choices[0].get("message", {}) or {}).get("content") or ""
     return text.strip()
@@ -322,9 +334,11 @@ def suspicious_flags():
     society = Society.get_config()
 
     # 1. Frequent visitors: 5+ requests in 7 days.
+    # NOTE: every registration creates a fresh Visitor row, so group by the
+    # person's phone+name — grouping by visitor_id would never reach 5.
     frequent = (
         VisitRequest.objects.filter(created_at__gte=week_ago)
-        .values("visitor__id", "visitor__full_name", "visitor__phone")
+        .values("visitor__phone", "visitor__full_name")
         .annotate(n=Count("id"))
         .filter(n__gte=5)
         .order_by("-n")[:10]
@@ -376,7 +390,9 @@ def suspicious_flags():
                 }
             )
 
-    # 3. Rejected request followed by a fresh request for the same visitor.
+    # 3. Rejected request followed by a fresh request for the same person.
+    # Matched by phone (falling back to name) — see note on rule 1 about
+    # fresh Visitor rows per registration.
     rejected = (
         VisitRequest.objects.filter(status="rejected", created_at__gte=week_ago)
         .select_related("visitor")
@@ -384,15 +400,27 @@ def suspicious_flags():
     )
     seen = set()
     for r in rejected:
-        if not r.visitor_id or r.visitor_id in seen:
+        if not r.visitor:
             continue
-        retry = VisitRequest.objects.filter(
-            visitor_id=r.visitor_id,
-            created_at__gt=r.created_at,
-            status__in=("pending", "approved"),
-        ).exists()
+        phone = (r.visitor.phone or "").strip()
+        name = (r.visitor.full_name or "").strip()
+        key = phone or name.lower()
+        if not key or key in seen:
+            continue
+        if phone:
+            retry = VisitRequest.objects.filter(
+                visitor__phone=phone,
+                created_at__gt=r.created_at,
+                status__in=("pending", "approved"),
+            ).exists()
+        else:
+            retry = VisitRequest.objects.filter(
+                visitor__full_name__iexact=name,
+                created_at__gt=r.created_at,
+                status__in=("pending", "approved"),
+            ).exists()
         if retry:
-            seen.add(r.visitor_id)
+            seen.add(key)
             flags.append(
                 {
                     "severity": "medium",
@@ -403,6 +431,31 @@ def suspicious_flags():
                     ),
                 }
             )
+
+    # 3b. Repeatedly rejected: the same person refused 3+ times in 7 days.
+    # (Rule 3 above only catches rejected-then-approved/pending; a visitor
+    # who keeps getting rejected never trips it — yet persistence after
+    # repeated refusals is the more suspicious pattern.)
+    # Grouped by phone+name — see note on rule 1.
+    repeat_rejected = (
+        VisitRequest.objects.filter(status="rejected", created_at__gte=week_ago)
+        .values("visitor__phone", "visitor__full_name")
+        .annotate(n=Count("id"))
+        .filter(n__gte=3)
+        .order_by("-n")[:10]
+    )
+    for row in repeat_rejected:
+        flags.append(
+            {
+                "severity": "high",
+                "title": f"Repeatedly rejected: {row['visitor__full_name']}",
+                "detail": (
+                    f"{row['n']} visit requests rejected in the last 7 days "
+                    f"(phone {row['visitor__phone'] or '—'}). "
+                    "Persistent attempts despite refusals."
+                ),
+            }
+        )
 
     # 4. Long stays: entered 12+ hours ago, never checked out.
     cutoff = now - timedelta(hours=12)
