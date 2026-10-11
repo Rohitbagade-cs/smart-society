@@ -37,41 +37,63 @@ import { ID_PROOF_TYPES, VISITOR_TYPES, extractGates, formatApiError, residentLa
   ],
   template: `
     <div class="page" [@fadeSlideIn]>
-      <h1 class="page-title">Security Desk</h1>
-      <p class="page-subtitle">Register a visitor and raise an access request for the resident</p>
+      <div class="page-head-row">
+        <div>
+          <h1 class="page-title">Security Desk</h1>
+          <p class="page-subtitle">Register a visitor and raise an access request for the resident</p>
+        </div>
+        <button class="btn btn-secondary" (click)="goVerify()">
+          Verify visitor <mat-icon>arrow_forward</mat-icon>
+        </button>
+      </div>
 
-      <mat-card class="mb" *ngIf="flags !== null">
-        <mat-card-header>
-          <mat-card-title><mat-icon color="warn" style="vertical-align: middle;">warning</mat-icon> Security flags <span class="live-dot" title="Live monitoring"></span></mat-card-title>
-          <span class="toolbar-spacer"></span>
-          <button mat-stroked-button type="button" (click)="loadBriefing()" [disabled]="briefingLoading">
-            <mat-icon>auto_awesome</mat-icon>
-            {{ briefingLoading ? 'Writing…' : 'AI briefing' }}
-          </button>
-          <button mat-icon-button (click)="loadFlags()" aria-label="Refresh flags">
-            <mat-icon>refresh</mat-icon>
-          </button>
-        </mat-card-header>
-        <mat-card-content>
-          <div *ngIf="flags.length === 0" class="empty-state">No suspicious activity detected in the last 7 days.</div>
-          <div *ngFor="let f of flags" class="flag flag-{{ f.severity }}">
-            <strong>{{ f.title }}</strong>
-            <p>{{ f.detail }}</p>
+      <div class="card mb" *ngIf="flags !== null">
+        <div class="widget-head">
+          <div>
+            <div class="widget-title">
+              Security flags
+              <span class="chip chip-low" style="margin-left:8px">Live</span>
+            </div>
+            <div class="widget-sub">Rule-based monitoring · last 7 days</div>
           </div>
-          <div *ngIf="briefingLoading" class="briefing"><mat-spinner diameter="24"></mat-spinner></div>
-          <div *ngIf="briefing" class="briefing">
-            <strong><mat-icon style="vertical-align: middle; font-size: 18px;">auto_awesome</mat-icon> AI briefing</strong>
-            <p>{{ briefing }}</p>
+          <div class="pd-row">
+            <button class="btn btn-secondary btn-sm" type="button" (click)="loadBriefing()" [disabled]="briefingLoading">
+              <mat-icon>auto_awesome</mat-icon>
+              {{ briefingLoading ? 'Writing…' : 'AI briefing' }}
+            </button>
+            <button class="btn btn-ghost btn-sm" (click)="loadFlags()" aria-label="Refresh flags">
+              <mat-icon>refresh</mat-icon>
+            </button>
           </div>
-        </mat-card-content>
-      </mat-card>
+        </div>
+        <div *ngIf="flags.length === 0" class="empty-state">
+          <mat-icon>shield</mat-icon>
+          <div class="empty-title">All clear</div>
+          <div>No suspicious activity detected in the last 7 days.</div>
+        </div>
+        <div *ngFor="let f of flags" class="flag-item">
+          <span class="sev-dot" [ngClass]="'sev-' + f.severity"></span>
+          <div style="flex:1; min-width:0">
+            <div class="flag-title">{{ f.title }}</div>
+            <div class="flag-detail">{{ f.detail }}</div>
+          </div>
+          <span class="chip" [ngClass]="'chip-' + f.severity">{{ f.severity }}</span>
+        </div>
+        <div *ngIf="briefingLoading" class="briefing mt"><mat-spinner diameter="24"></mat-spinner></div>
+        <div *ngIf="briefing" class="briefing mt">
+          <div class="roofline"><span class="beacon"></span>AI briefing</div>
+          <p style="margin:6px 0 0;">{{ briefing }}</p>
+        </div>
+      </div>
 
-      <mat-card class="mb">
-        <mat-card-header>
-          <mat-card-title>Register visitor</mat-card-title>
-          <span class="toolbar-spacer"></span>
+      <div class="card mb">
+        <div class="widget-head">
+          <div>
+            <div class="widget-title">Register visitor</div>
+            <div class="widget-sub">Walk-in registration at the gate</div>
+          </div>
           <button
-            mat-stroked-button
+            class="btn btn-secondary btn-sm"
             type="button"
             *ngIf="voiceSupported"
             (click)="toggleVoice()"
@@ -80,246 +102,136 @@ import { ID_PROOF_TYPES, VISITOR_TYPES, extractGates, formatApiError, residentLa
             <mat-icon>{{ listening ? 'mic' : 'mic_none' }}</mat-icon>
             {{ listening ? 'Listening…' : parsing ? 'Parsing…' : 'Voice fill' }}
           </button>
-        </mat-card-header>
-        <mat-card-content>
-          <p *ngIf="transcript" class="voice-note">Heard: “{{ transcript }}”</p>
-          <form [formGroup]="form" (ngSubmit)="submit()" autocomplete="off">
-            <h3>Visitor details</h3>
-            <div class="form-grid">
-              <mat-form-field appearance="outline">
-                <mat-label>Full name</mat-label>
-                <input matInput formControlName="full_name" (blur)="lookupFromHistory()" />
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Phone</mat-label>
-                <input matInput formControlName="phone" (blur)="lookupFromHistory()" />
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Visitor type</mat-label>
-                <mat-select formControlName="visitor_type">
-                  <mat-option *ngFor="let t of visitorTypes" [value]="t.value">{{ t.label }}</mat-option>
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Vehicle number (optional)</mat-label>
-                <input matInput formControlName="vehicle_number" />
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>ID proof type</mat-label>
-                <mat-select formControlName="id_proof_type">
-                  <mat-option value="">None</mat-option>
-                  <mat-option *ngFor="let t of idProofTypes" [value]="t">{{ t }}</mat-option>
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>ID proof number</mat-label>
-                <input matInput formControlName="id_proof_number" />
-              </mat-form-field>
-            </div>
+        </div>
+        <p *ngIf="transcript" class="voice-note">Heard: “{{ transcript }}”</p>
+        <form [formGroup]="form" (ngSubmit)="submit()" autocomplete="off">
+          <div class="section-title" style="margin-top:0">Visitor details</div>
+          <div class="form-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Full name</mat-label>
+              <input matInput formControlName="full_name" (blur)="lookupFromHistory()" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Phone</mat-label>
+              <input matInput formControlName="phone" (blur)="lookupFromHistory()" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Visitor type</mat-label>
+              <mat-select formControlName="visitor_type">
+                <mat-option *ngFor="let t of visitorTypes" [value]="t.value">{{ t.label }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Vehicle number (optional)</mat-label>
+              <input matInput formControlName="vehicle_number" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>ID proof type</mat-label>
+              <mat-select formControlName="id_proof_type">
+                <mat-option value="">None</mat-option>
+                <mat-option *ngFor="let t of idProofTypes" [value]="t">{{ t }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>ID proof number</mat-label>
+              <input matInput formControlName="id_proof_number" />
+            </mat-form-field>
+          </div>
 
-            <h3 class="mt">Visit details</h3>
-            <div class="form-grid">
-              <mat-form-field appearance="outline">
-                <mat-label>Visiting resident (flat)</mat-label>
-                <mat-select formControlName="resident">
-                  <mat-option *ngFor="let r of residents" [value]="residentId(r)">
-                    {{ residentLabel(r) }}
-                  </mat-option>
-                </mat-select>
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Purpose</mat-label>
-                <input matInput formControlName="purpose" placeholder="e.g. Personal visit" />
-              </mat-form-field>
-              <mat-form-field appearance="outline">
-                <mat-label>Expected at</mat-label>
-                <input matInput type="datetime-local" formControlName="expected_at" />
-              </mat-form-field>
-            </div>
+          <div class="section-title">Visit details</div>
+          <div class="form-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Visiting resident (flat)</mat-label>
+              <mat-select formControlName="resident">
+                <mat-option *ngFor="let r of residents" [value]="residentId(r)">
+                  {{ residentLabel(r) }}
+                </mat-option>
+              </mat-select>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Purpose</mat-label>
+              <input matInput formControlName="purpose" placeholder="e.g. Personal visit" />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Expected at</mat-label>
+              <input matInput type="datetime-local" formControlName="expected_at" />
+            </mat-form-field>
+          </div>
 
-            <div class="form-actions">
-              <button mat-raised-button color="primary" type="submit" [disabled]="form.invalid || saving">
-                {{ saving ? 'Registering…' : 'Register & request access' }}
-              </button>
-              <button mat-stroked-button type="button" (click)="autoType()" [disabled]="classifying">
-                <mat-icon>auto_awesome</mat-icon>
-                {{ classifying ? 'Detecting…' : 'Auto-detect type' }}
-              </button>
-            </div>
-          </form>
-        </mat-card-content>
-      </mat-card>
+          <div class="form-actions">
+            <button class="btn btn-secondary" type="button" (click)="autoType()" [disabled]="classifying">
+              <mat-icon>auto_awesome</mat-icon>
+              {{ classifying ? 'Detecting…' : 'Auto-detect type' }}
+            </button>
+            <button class="btn btn-primary" type="submit" [disabled]="form.invalid || saving">
+              {{ saving ? 'Registering…' : 'Register & request access' }}
+            </button>
+          </div>
+        </form>
+      </div>
 
-      <mat-card>
-        <mat-card-header>
-          <mat-card-title>Recent visit requests</mat-card-title>
+      <div class="card" style="padding:0; overflow:hidden">
+        <div class="table-toolbar">
+          <div>
+            <div class="widget-title">Recent visit requests</div>
+            <div class="widget-sub">{{ recentCount }} requests</div>
+          </div>
           <span class="toolbar-spacer"></span>
-          <button mat-button color="primary" (click)="goVerify()">
-            Verify visitor <mat-icon>arrow_forward</mat-icon>
-          </button>
-        </mat-card-header>
-        <mat-card-content>
-          <div class="recent-filters">
-            <mat-form-field appearance="outline" class="recent-search">
-              <mat-label>Search visitor / phone</mat-label>
-              <input
-                matInput
-                #recentSearchInput
-                placeholder="Name or phone"
-                (keyup.enter)="applyRecentFilters(recentSearchInput.value)"
-              />
-              <mat-icon matSuffix>search</mat-icon>
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="recent-status">
-              <mat-label>Status</mat-label>
-              <mat-select [value]="recentStatus" (selectionChange)="onRecentStatusChange($event.value)">
-                <mat-option *ngFor="let s of recentStatuses" [value]="s.value">{{ s.label }}</mat-option>
-              </mat-select>
-            </mat-form-field>
-            <button mat-raised-button color="primary" (click)="applyRecentFilters(recentSearchInput.value)">
-              Search
-            </button>
-            <button mat-button (click)="clearRecentFilters(recentSearchInput)">Clear</button>
-            <span class="toolbar-spacer"></span>
-            <mat-form-field appearance="outline" class="recent-pagesize">
-              <mat-label>Rows</mat-label>
-              <mat-select [value]="recentPageSize" (selectionChange)="onRecentPageSizeChange($event.value)">
-                <mat-option *ngFor="let n of recentPageSizes" [value]="n">{{ n }}</mat-option>
-              </mat-select>
-            </mat-form-field>
-          </div>
-          <div class="table-wrap">
-            <table mat-table [dataSource]="recent">
-              <ng-container matColumnDef="id">
-                <th mat-header-cell *matHeaderCellDef>ID</th>
-                <td mat-cell *matCellDef="let r">{{ r.id }}</td>
-              </ng-container>
-              <ng-container matColumnDef="visitor">
-                <th mat-header-cell *matHeaderCellDef>Visitor</th>
-                <td mat-cell *matCellDef="let r">{{ r.visitor?.full_name }}</td>
-              </ng-container>
-              <ng-container matColumnDef="flat">
-                <th mat-header-cell *matHeaderCellDef>Flat</th>
-                <td mat-cell *matCellDef="let r">{{ r.resident_flat || '—' }}</td>
-              </ng-container>
-              <ng-container matColumnDef="purpose">
-                <th mat-header-cell *matHeaderCellDef>Purpose</th>
-                <td mat-cell *matCellDef="let r">{{ r.purpose }}</td>
-              </ng-container>
-              <ng-container matColumnDef="status">
-                <th mat-header-cell *matHeaderCellDef>Status</th>
-                <td mat-cell *matCellDef="let r">
-                  <span class="status status-{{ r.status }}">{{ r.status }}</span>
+          <label class="search-box">
+            <mat-icon>search</mat-icon>
+            <input
+              #recentSearchInput
+              placeholder="Search name or phone…"
+              (keyup.enter)="applyRecentFilters(recentSearchInput.value)"
+              aria-label="Search requests"
+            />
+          </label>
+          <select class="select-box" [value]="recentStatus" (change)="onRecentStatusChange($any($event.target).value)" aria-label="Status filter">
+            <option *ngFor="let s of recentStatuses" [value]="s.value">{{ s.label }}</option>
+          </select>
+          <select class="select-box" [value]="recentPageSize" (change)="onRecentPageSizeChange(+$any($event.target).value)" aria-label="Rows per page">
+            <option *ngFor="let n of recentPageSizes" [value]="n">{{ n }} / page</option>
+          </select>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>ID</th><th>Visitor</th><th>Flat</th><th>Purpose</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of recent">
+                <td class="cell-sub">#{{ r.id }}</td>
+                <td>
+                  <div class="cell-main">{{ r.visitor?.full_name }}</div>
+                  <div class="cell-sub">{{ r.visitor?.phone }}</div>
                 </td>
-              </ng-container>
-              <tr mat-header-row *matHeaderRowDef="recentCols"></tr>
-              <tr mat-row *matRowDef="let row; columns: recentCols"></tr>
-            </table>
-            <div class="empty-state" *ngIf="recent.length === 0 && !loadingRecent">
-              {{ recentSearch || recentStatus ? 'No requests match your filters.' : 'No requests yet.' }}
-            </div>
+                <td>{{ r.resident_flat || '—' }}</td>
+                <td>{{ r.purpose }}</td>
+                <td><span class="chip chip-{{ r.status }}">{{ r.status.replace('_', ' ') }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="empty-state" *ngIf="recent.length === 0 && !loadingRecent">
+            <mat-icon>inbox</mat-icon>
+            <div class="empty-title">{{ recentSearch || recentStatus ? 'No requests match your filters.' : 'No requests yet.' }}</div>
           </div>
-          <div class="recent-pager" *ngIf="recentCount > 0">
-            <span class="pager-info">
-              {{ recentCount }} request{{ recentCount === 1 ? '' : 's' }} · Page {{ recentPage }} of {{ recentTotalPages }}
-            </span>
-            <button mat-stroked-button (click)="recentPrev()" [disabled]="recentPage <= 1">
-              <mat-icon>chevron_left</mat-icon> Prev
-            </button>
-            <button mat-stroked-button (click)="recentNext()" [disabled]="recentPage >= recentTotalPages">
-              Next <mat-icon>chevron_right</mat-icon>
-            </button>
+          <div class="empty-state" *ngIf="loadingRecent"><mat-spinner diameter="32"></mat-spinner></div>
+        </div>
+        <div class="table-foot" *ngIf="recentCount > 0">
+          <span>{{ recentCount }} requests · Page {{ recentPage }} of {{ recentTotalPages }}</span>
+          <div class="pager">
+            <button (click)="recentPrev()" [disabled]="recentPage <= 1" aria-label="Previous page"><mat-icon>chevron_left</mat-icon></button>
+            <button (click)="recentNext()" [disabled]="recentPage >= recentTotalPages" aria-label="Next page"><mat-icon>chevron_right</mat-icon></button>
           </div>
-        </mat-card-content>
-      </mat-card>
+        </div>
+      </div>
     </div>
   `,
   styles: [
     `
-      .recent-filters {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-bottom: 14px;
-      }
-      .recent-search {
-        flex: 1 1 220px;
-        min-width: 180px;
-      }
-      .recent-status {
-        width: 168px;
-      }
-      .recent-pagesize {
-        width: 104px;
-      }
-      .recent-pager {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        justify-content: flex-end;
-        margin-top: 12px;
-        flex-wrap: wrap;
-      }
-      .pager-info {
-        font-size: 13px;
-        color: var(--text-dim);
-        margin-right: auto;
-      }
-      @media (max-width: 600px) {
-        .recent-status,
-        .recent-pagesize {
-          flex: 1 1 45%;
-          width: auto;
-        }
-      }
-      .flag {
-        border-left: 4px solid #b0b6d4;
-        border-top: 1px solid var(--border);
-        border-right: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        padding: 12px 16px;
-        margin-bottom: 10px;
-        background: #f6f8fd;
-        border-radius: 0 12px 12px 0;
-      }
-      .flag strong {
-        color: #1b1e2e;
-        font-size: 14px;
-      }
-      .flag p {
-        margin: 5px 0 0;
-        color: #5b6080;
-        font-size: 13px;
-        line-height: 1.55;
-      }
-      .flag-high {
-        border-left-color: #e53935;
-        background: rgba(229, 57, 53, 0.06);
-      }
-      .flag-medium {
-        border-left-color: #fb8c00;
-        background: rgba(251, 140, 0, 0.07);
-      }
-      .flag-low {
-        border-left-color: #1e88e5;
-        background: rgba(30, 136, 229, 0.06);
-      }
-      .voice-note {
-        font-style: italic;
-        color: #5b6080;
-        margin: 0 0 8px;
-      }
-      .briefing {
-        margin-top: 12px;
-        padding: 12px 14px;
-        background: #eef4ff;
-        border-radius: 8px;
-      }
-      .briefing p {
-        margin: 6px 0 0;
-        white-space: pre-wrap;
-      }
+      .section-title { font-size: 14px; margin: 20px 0 12px; }
+      .section-title:first-of-type { margin-top: 4px; }
+      .voice-note { font-style: italic; margin: 0 0 12px; }
     `,
   ],
   animations: [fadeSlideIn],

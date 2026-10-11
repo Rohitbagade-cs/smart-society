@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -30,8 +30,8 @@ const MONTHS = [
   standalone: true,
   imports: [
     CommonModule,
-    RouterLink,
     ReactiveFormsModule,
+    RouterLink,
     MatCardModule,
     MatFormFieldModule,
     MatInputModule,
@@ -46,35 +46,39 @@ const MONTHS = [
   ],
   template: `
     <div class="page">
-      <h1 class="page-title">Reports</h1>
-      <p class="page-subtitle">Daily and monthly visitor &amp; access summaries</p>
+      <div class="page-head-row">
+        <div>
+          <h1 class="page-title">Reports</h1>
+          <p class="page-subtitle">Daily and monthly visitor &amp; access summaries</p>
+        </div>
+      </div>
 
-      <section class="report-ai-brief" aria-labelledby="report-ai-title">
-        <div class="report-ai-heading">
-          <div class="report-ai-icon" aria-hidden="true"><mat-icon>auto_awesome</mat-icon></div>
+      <!-- Weekly operations brief -->
+      <div class="card mb">
+        <div class="roofline"><span class="beacon"></span>AI · Live society data</div>
+        <div class="brief-head">
+          <mat-icon class="brief-icon">auto_awesome</mat-icon>
           <div>
-            <div class="eyebrow">AI · LIVE SOCIETY DATA</div>
-            <h2 id="report-ai-title">Weekly operations brief</h2>
-            <p>A concise read on current activity, what to watch, and a practical next step.</p>
+            <div class="widget-title">Weekly operations brief</div>
+            <p class="muted" style="margin:4px 0 0;">
+              A concise read on current activity, what to watch, and a practical next step.
+            </p>
           </div>
         </div>
-        <div class="report-ai-actions">
-          <button mat-raised-button color="primary" type="button" (click)="generateAiBrief()" [disabled]="aiBriefLoading">
-            <mat-spinner *ngIf="aiBriefLoading" diameter="17"></mat-spinner>
-            <mat-icon *ngIf="!aiBriefLoading">{{ aiBrief ? 'refresh' : 'auto_awesome' }}</mat-icon>
-            {{ aiBriefLoading ? 'Preparing brief…' : aiBrief ? 'Refresh brief' : 'Generate brief' }}
+        <div class="brief-actions">
+          <button class="btn btn-primary" (click)="generateBrief()" [disabled]="briefingLoading">
+            <mat-icon>auto_awesome</mat-icon>
+            {{ briefingLoading ? 'Writing…' : 'Generate brief' }}
           </button>
-          <button mat-stroked-button type="button" *ngIf="aiBrief" (click)="copyAiBrief()">
-            <mat-icon>content_copy</mat-icon> Copy brief
-          </button>
-          <a routerLink="/admin/ai-chat" class="report-ai-link">Ask a follow-up <mat-icon>arrow_forward</mat-icon></a>
+          <a class="brief-followup" routerLink="/admin/ai-chat">
+            Ask a follow-up <mat-icon>arrow_forward</mat-icon>
+          </a>
         </div>
-        <div class="report-ai-output" *ngIf="aiBrief" aria-live="polite">
-          <div class="report-ai-output-label"><span class="live-dot"></span> Generated from the latest live snapshot</div>
-          <p>{{ aiBrief }}</p>
+        <div *ngIf="briefingLoading" class="briefing mt">
+          <mat-spinner diameter="24"></mat-spinner>
         </div>
-        <div class="report-ai-error" *ngIf="aiBriefError" role="alert">{{ aiBriefError }}</div>
-      </section>
+        <div *ngIf="briefing" class="briefing mt">{{ briefing }}</div>
+      </div>
 
       <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));">
         <mat-card>
@@ -144,7 +148,7 @@ const MONTHS = [
         </mat-card>
       </div>
 
-      <mat-card *ngIf="monthly?.daily_breakdown?.length">
+      <mat-card class="mt" *ngIf="monthly?.daily_breakdown?.length">
         <mat-card-header><mat-card-title>Daily breakdown</mat-card-title></mat-card-header>
         <mat-card-content>
           <div class="table-wrap">
@@ -161,6 +165,27 @@ const MONTHS = [
       </mat-card>
     </div>
   `,
+  styles: [
+    `
+      .brief-head { display: flex; gap: 14px; align-items: flex-start; margin: 10px 0 4px; }
+      .brief-icon {
+        width: 44px; height: 44px; border-radius: 14px; flex: none;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: var(--violet-soft); color: var(--violet);
+        font-size: 24px; width: 44px; height: 44px;
+      }
+      .brief-actions { display: flex; align-items: center; gap: 18px; margin-top: 16px; flex-wrap: wrap; }
+      .brief-followup {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-weight: 600; font-size: 14px; color: var(--primary);
+      }
+      .brief-followup:hover { color: var(--primary-deep); }
+      .brief-followup mat-icon { font-size: 18px; width: 18px; height: 18px; }
+      @media (max-width: 560px) {
+        .brief-actions { gap: 12px; }
+      }
+    `,
+  ],
 })
 export class ReportsComponent implements OnInit {
   private fb = inject(FormBuilder);
@@ -177,51 +202,33 @@ export class ReportsComponent implements OnInit {
   monthly: MonthlyReport | null = null;
   loadingDaily = false;
   loadingMonthly = false;
-  aiBrief = '';
-  aiBriefLoading = false;
-  aiBriefError = '';
 
-  generateAiBrief(): void {
-    if (this.aiBriefLoading) return;
-    this.aiBriefLoading = true;
-    this.aiBriefError = '';
-    this.aiBrief = '';
-    const prompt = [
-      'Write a concise weekly operations brief for the society administrator from the live data snapshot.',
-      'Use exactly these three short labeled sections: Pulse, Watch, Next action.',
-      'Pulse should summarize the supported activity counts. Watch should identify a concern only when supported by the snapshot, otherwise say no clear concern is visible.',
-      'Next action should be one practical step grounded in the snapshot.',
-      'Do not invent numbers, dates, trends, or causes. Keep the whole brief under 120 words.',
-    ].join(' ');
-    this.ai.chat(prompt).subscribe({
-      next: (reply) => {
-        this.aiBrief = reply.answer?.trim() || 'The assistant returned an empty brief. Please try again.';
-        this.aiBriefLoading = false;
-      },
-      error: (error) => {
-        this.aiBriefError = error?.status === 429
-          ? 'The AI request limit has been reached. Try again later.'
-          : error?.status === 503
-            ? 'AI is not configured for this workspace. Contact your system administrator.'
-            : 'The brief could not be generated right now. Please try again.';
-        this.aiBriefLoading = false;
-      },
-    });
-  }
-
-  copyAiBrief(): void {
-    if (!this.aiBrief) return;
-    navigator.clipboard.writeText(this.aiBrief).then(
-      () => this.snack.open('AI brief copied', 'Close', { duration: 2000 }),
-      () => this.snack.open('Could not copy the brief', 'Close', { duration: 2500 })
-    );
-  }
+  briefing: string | null = null;
+  briefingLoading = false;
 
   ngOnInit(): void {
     const y = new Date().getFullYear();
     this.years = [y - 2, y - 1, y, y + 1];
     this.loadDaily();
     this.loadMonthly();
+  }
+
+  /** LLM-written weekly operations brief over live gate data. */
+  generateBrief(): void {
+    if (this.briefingLoading) return;
+    this.briefingLoading = true;
+    this.briefing = null;
+    this.ai
+      .securityBriefing()
+      .pipe(catchError((e) => of({ briefing: '' })))
+      .subscribe((r) => {
+        this.briefingLoading = false;
+        if (r?.briefing) {
+          this.briefing = r.briefing;
+        } else {
+          this.snack.open('Could not generate the brief right now.', 'Close', { duration: 4000 });
+        }
+      });
   }
 
   private metricsOf(r: Record<string, unknown>): { label: string; value: unknown }[] {

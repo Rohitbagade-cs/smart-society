@@ -374,6 +374,15 @@ export class MyProfileComponent implements OnInit {
       next: (p) => {
         this.profile = p;
         this.loading = false;
+        // Flat number is only required for residents — admins and guards
+        // don't have a flat field, so the validator must not block them.
+        const flatCtrl = this.form.get('flat_no');
+        if (this.isResident) {
+          flatCtrl?.addValidators(Validators.required);
+        } else {
+          flatCtrl?.clearValidators();
+        }
+        flatCtrl?.updateValueAndValidity();
         this.resetForm();
       },
       error: (e) => {

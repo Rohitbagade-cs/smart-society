@@ -137,14 +137,14 @@ interface VisitorPass {
       .orb-1 {
         width: 420px;
         height: 420px;
-        background: radial-gradient(circle, #7c4dff, transparent 70%);
+        background: radial-gradient(circle, #b9c6ff, transparent 70%);
         top: -120px;
         left: -100px;
       }
       .orb-2 {
         width: 380px;
         height: 380px;
-        background: radial-gradient(circle, #ff4081, transparent 70%);
+        background: radial-gradient(circle, #a9ecdf, transparent 70%);
         bottom: -120px;
         right: -100px;
         animation-delay: -8s;
@@ -170,8 +170,7 @@ interface VisitorPass {
         max-width: 400px;
         z-index: 1;
         overflow: hidden;
-        border-top: 4px solid transparent !important;
-        border-image: linear-gradient(90deg, var(--violet), var(--pink), var(--teal)) 1 !important;
+        border-top: 4px solid var(--primary) !important;
       }
       .pass-head {
         display: flex;
@@ -192,8 +191,8 @@ interface VisitorPass {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(135deg, var(--violet), var(--pink));
-        box-shadow: 0 6px 18px rgba(124, 77, 255, 0.4);
+        background: var(--primary);
+        box-shadow: var(--shadow-primary);
         flex: none;
       }
       .brand-mark mat-icon {

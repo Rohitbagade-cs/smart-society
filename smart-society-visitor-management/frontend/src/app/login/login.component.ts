@@ -193,6 +193,57 @@ import { AuthService } from '../core/auth.service';
       .mt {
         margin-top: 18px;
       }
+      .login-wrap {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        position: relative;
+        background: var(--bg);
+      }
+      .login-card {
+        width: 100%;
+        max-width: 420px;
+        position: relative;
+        z-index: 1;
+        padding: 8px;
+      }
+      .login-brand {
+        text-align: center;
+        margin-bottom: 24px;
+      }
+      .login-brand .brand-mark {
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--primary);
+        color: #fff;
+        box-shadow: var(--shadow-primary);
+        margin-bottom: 14px;
+      }
+      .login-brand .brand-mark mat-icon {
+        font-size: 30px;
+        width: 30px;
+        height: 30px;
+      }
+      .login-brand h2 {
+        font-size: 22px;
+        margin-bottom: 6px;
+      }
+      .login-error {
+        background: var(--danger-bg);
+        color: var(--danger);
+        border: 1px solid rgba(217, 45, 32, 0.25);
+        border-radius: var(--r-sm);
+        padding: 10px 14px;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 16px;
+      }
     `,
   ],
 })

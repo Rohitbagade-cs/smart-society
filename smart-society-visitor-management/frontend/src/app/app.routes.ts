@@ -10,6 +10,7 @@ import { ReportsComponent } from './admin/reports/reports.component';
 import { SocietyConfigComponent } from './admin/society-config/society-config.component';
 import { AuditLogComponent } from './admin/audit-log/audit-log.component';
 import { AiChatComponent } from './admin/ai-chat/ai-chat.component';
+import { SecurityFlagsComponent } from './admin/security-flags/security-flags.component';
 import { GuardDashboardComponent } from './guard/guard-dashboard/guard-dashboard.component';
 import { VerifyComponent } from './guard/verify/verify.component';
 import { EntryExitComponent } from './guard/entry-exit/entry-exit.component';
@@ -53,6 +54,7 @@ export const routes: Routes = [
       { path: 'visitors', component: VisitorRecordsComponent },
       { path: 'reports', component: ReportsComponent },
       { path: 'society', component: SocietyConfigComponent },
+      { path: 'flags', component: SecurityFlagsComponent },
       { path: 'audit', component: AuditLogComponent },
       { path: 'ai-chat', component: AiChatComponent },
       { path: 'profile', component: MyProfileComponent },
