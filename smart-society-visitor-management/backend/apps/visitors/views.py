@@ -11,6 +11,8 @@ Visitors views: the full gate workflow.
 - AuditLogViewSet        admin, read-only, filterable
 """
 
+import math
+
 from django.conf import settings
 from django.db.models import Count
 from django.db.models.functions import TruncDate
@@ -650,6 +652,7 @@ class VisitorPassView(APIView):
                 "expected_at": vr.expected_at,
                 "status": vr.status,
                 "otp_verified": vr.otp_verified,
+                "face_enrolled": bool(vr.visitor.face_embedding),
             }
         )
 
@@ -670,3 +673,152 @@ class VisitorPassQrView(APIView):
         society = Society.get_config()
         png = render_qr_png(build_qr_payload(vr, society.name))
         return HttpResponse(png, content_type="image/png")
+
+
+# ---------------------------------------------------------------------------
+# Face recognition: enrollment + gate matching
+# ---------------------------------------------------------------------------
+
+FACE_DESCRIPTOR_LEN = 128
+# Euclidean distance threshold for a match (face-api.js uses ~0.6; stricter).
+FACE_MATCH_THRESHOLD = 0.55
+
+
+def _clean_descriptor(value):
+    """Validate a 128-number face descriptor from the client."""
+    if not isinstance(value, list) or len(value) != FACE_DESCRIPTOR_LEN:
+        raise ValidationError(
+            {"descriptor": f"A {FACE_DESCRIPTOR_LEN}-number face descriptor is required."}
+        )
+    try:
+        return [float(x) for x in value]
+    except (TypeError, ValueError):
+        raise ValidationError({"descriptor": "Descriptor must contain numbers only."})
+
+
+def _euclidean(a, b):
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+
+
+class MatchFaceView(APIView):
+    """POST /api/face/match/ — guard scans a face; returns the best enrolled match.
+
+    Body: {"descriptor": [128 floats]}. Only approved, recent visit requests
+    are eligible. Returns 200 with {"match": null} when nobody matches —
+    never an error — so the guard UI can fall back to manual registration.
+    The guard must still confirm before checking anyone in.
+    """
+
+    permission_classes = [IsGuard]
+
+    def post(self, request):
+        descriptor = _clean_descriptor(request.data.get("descriptor"))
+        cutoff = timezone.now() - timezone.timedelta(days=2)
+        candidates = (
+            VisitRequest.objects.select_related("visitor", "resident")
+            .filter(status=VisitRequest.Status.APPROVED, created_at__gte=cutoff)
+            .order_by("-created_at")
+        )
+        best = None
+        best_dist = None
+        for vr in candidates:
+            emb = vr.visitor.face_embedding
+            if not isinstance(emb, list) or len(emb) != FACE_DESCRIPTOR_LEN:
+                continue
+            dist = _euclidean(descriptor, emb)
+            if best_dist is None or dist < best_dist:
+                best, best_dist = vr, dist
+        if best is None or best_dist > FACE_MATCH_THRESHOLD:
+            return Response({"match": None})
+        profile = getattr(best.resident, "resident_profile", None)
+        return Response(
+            {
+                "match": {
+                    "visit_request_id": best.id,
+                    "visitor_id": best.visitor.id,
+                    "visitor_name": best.visitor.full_name,
+                    "phone": best.visitor.phone,
+                    "visitor_type": best.visitor.visitor_type,
+                    "flat": getattr(profile, "flat_no", None),
+                    "purpose": best.purpose,
+                    "expected_at": best.expected_at,
+                    "confidence": round(max(0.0, 1 - best_dist), 3),
+                }
+            }
+        )
+
+
+class EnrollFaceView(APIView):
+    """POST /api/face/enroll/<visitor_id>/ — guard stores a face descriptor.
+
+    Body: {"descriptor": [128 floats]}. Embeddings only; raw photos are
+    never sent to or stored on the server.
+    """
+
+    permission_classes = [IsGuard]
+
+    def post(self, request, visitor_id):
+        descriptor = _clean_descriptor(request.data.get("descriptor"))
+        try:
+            visitor = Visitor.objects.get(id=visitor_id)
+        except Visitor.DoesNotExist:
+            raise NotFound("Visitor not found.")
+        visitor.face_embedding = descriptor
+        visitor.save(update_fields=["face_embedding"])
+        log_audit(
+            request,
+            "face.enroll",
+            "visitor",
+            visitor.id,
+            {"visitor": visitor.full_name},
+        )
+        return Response({"enrolled": True})
+
+
+class PassCompleteView(APIView):
+    """POST /api/visitor-pass/<token>/complete/ — visitor self-enrollment.
+
+    Public (the token is the unguessable key). The visitor fills in their own
+    details and a face descriptor from the gate-pass link on their phone, so
+    the guard can later check them in with a single face scan.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        try:
+            vr = VisitRequest.objects.select_related("visitor").get(qr_token=token)
+        except VisitRequest.DoesNotExist:
+            raise NotFound("This pass link is invalid.")
+        if vr.status in (VisitRequest.Status.CANCELLED, VisitRequest.Status.REJECTED):
+            raise ValidationError("This pass is no longer valid.")
+        if vr.status in (VisitRequest.Status.CHECKED_IN, VisitRequest.Status.CHECKED_OUT):
+            raise ValidationError("This pass has already been used.")
+
+        data = request.data
+        descriptor = _clean_descriptor(data.get("descriptor"))
+        full_name = (data.get("full_name") or "").strip()
+        phone = (data.get("phone") or "").strip()
+        if not full_name or not phone:
+            raise ValidationError("full_name and phone are required.")
+
+        visitor = vr.visitor
+        visitor.full_name = full_name
+        visitor.phone = phone
+        visitor_type = (data.get("visitor_type") or "guest").strip().lower()
+        if visitor_type in dict(Visitor.VisitorType.choices):
+            visitor.visitor_type = visitor_type
+        visitor.vehicle_number = (data.get("vehicle_number") or "").strip()
+        visitor.id_proof_type = (data.get("id_proof_type") or "").strip()
+        visitor.id_proof_number = (data.get("id_proof_number") or "").strip()
+        visitor.face_embedding = descriptor
+        visitor.save()
+        log_audit(
+            request,
+            "face.self_enroll",
+            "visitor",
+            visitor.id,
+            {"via": "pass-link", "request": vr.id},
+        )
+        return Response({"completed": True, "visitor_name": visitor.full_name})

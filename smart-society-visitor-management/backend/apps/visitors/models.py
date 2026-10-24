@@ -28,6 +28,9 @@ class Visitor(models.Model):
         max_length=16, choices=VisitorType.choices, default=VisitorType.GUEST
     )
     vehicle_number = models.CharField(max_length=30, blank=True)
+    # 128-d face descriptor (face-api.js) for gate face-scan matching.
+    # Embeddings only — raw photos are never stored.
+    face_embedding = models.JSONField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -7,9 +7,12 @@ from apps.visitors.views import (
     AccessLogViewSet,
     AuditLogViewSet,
     DailyReportView,
+    EnrollFaceView,
+    MatchFaceView,
     MonthlyReportView,
     NotificationViewSet,
     OTPVerifyView,
+    PassCompleteView,
     VisitRequestViewSet,
     VisitorPassQrView,
     VisitorPassView,
@@ -30,4 +33,12 @@ urlpatterns = [
     # Public visitor pass (no login; the qr_token is the unguessable key).
     path("visitor-pass/<str:token>/", VisitorPassView.as_view(), name="visitor-pass"),
     path("visitor-pass/<str:token>/qr/", VisitorPassQrView.as_view(), name="visitor-pass-qr"),
+    path(
+        "visitor-pass/<str:token>/complete/",
+        PassCompleteView.as_view(),
+        name="visitor-pass-complete",
+    ),
+    # Face recognition: descriptor match + enrollment (embeddings only, never photos).
+    path("face/match/", MatchFaceView.as_view(), name="face-match"),
+    path("face/enroll/<int:visitor_id>/", EnrollFaceView.as_view(), name="face-enroll"),
 ] + router.urls

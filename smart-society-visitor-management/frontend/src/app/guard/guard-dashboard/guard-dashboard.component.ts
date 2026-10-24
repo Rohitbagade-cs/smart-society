@@ -11,6 +11,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { FaceScanDialogComponent } from '../face-scan/face-scan-dialog.component';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ApiService } from '../../core/api.service';
@@ -34,6 +36,7 @@ import { ID_PROOF_TYPES, VISITOR_TYPES, extractGates, formatApiError, residentLa
     MatTableModule,
     MatSnackBarModule,
     MatProgressSpinnerModule,
+    MatDialogModule,
   ],
   template: `
     <div class="page" [@fadeSlideIn]>
@@ -92,6 +95,14 @@ import { ID_PROOF_TYPES, VISITOR_TYPES, extractGates, formatApiError, residentLa
             <div class="widget-title">Register visitor</div>
             <div class="widget-sub">Walk-in registration at the gate</div>
           </div>
+          <button
+            class="btn btn-secondary btn-sm"
+            type="button"
+            (click)="openFaceScan()"
+          >
+            <mat-icon>face</mat-icon>
+            Scan face
+          </button>
           <button
             class="btn btn-secondary btn-sm"
             type="button"
@@ -246,6 +257,7 @@ export class GuardDashboardComponent implements OnInit, OnDestroy {
   private ai = inject(AiService);
   private snack = inject(MatSnackBar);
   private router = inject(Router);
+  private dialog = inject(MatDialog);
 
   visitorTypes = VISITOR_TYPES;
   idProofTypes = ID_PROOF_TYPES;
@@ -379,6 +391,32 @@ export class GuardDashboardComponent implements OnInit, OnDestroy {
             duration: 4000,
           }),
       });
+  }
+
+  /** Face scan at the gate: identify an enrolled visitor and check them in. */
+  openFaceScan(): void {
+    const ref = this.dialog.open(FaceScanDialogComponent, {
+      data: { mode: 'match', gate: this.defaultGate },
+      maxWidth: '520px',
+    });
+    ref.afterClosed().subscribe((r) => {
+      if (r?.checkedIn) this.loadRecent();
+    });
+  }
+
+  /** Offer face enrollment right after a manual registration. */
+  private offerFaceEnroll(visitorId: number, visitorName: string): void {
+    const ref = this.snack.open(
+      `Request created for ${visitorName}. Enroll their face for faster check-ins?`,
+      'Enroll face',
+      { duration: 8000 }
+    );
+    ref.onAction().subscribe(() => {
+      this.dialog.open(FaceScanDialogComponent, {
+        data: { mode: 'enroll', visitorId, visitorName },
+        maxWidth: '520px',
+      });
+    });
   }
 
   /** Rule-based AI security flags (frequent visitors, after-hours, retries, long stays). */
@@ -624,11 +662,16 @@ export class GuardDashboardComponent implements OnInit, OnDestroy {
     this.api.post<VisitRequest>('/visit-requests/', body).subscribe({
       next: (req) => {
         this.saving = false;
-        this.snack.open(`Visit request #${req.id} created — awaiting resident approval`, 'Close', {
-          duration: 4000,
-        });
         this.form.reset({ visitor_type: 'guest', expected_at: this.defaultExpectedAt() });
         this.loadRecent();
+        const visitorId = req?.visitor?.id;
+        if (visitorId) {
+          this.offerFaceEnroll(visitorId, req.visitor?.full_name || `request #${req.id}`);
+        } else {
+          this.snack.open(`Visit request #${req.id} created — awaiting resident approval`, 'Close', {
+            duration: 4000,
+          });
+        }
       },
       error: (e) => {
         this.saving = false;
